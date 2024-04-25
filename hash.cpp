@@ -4,6 +4,9 @@
 #include <string>
 #include <sstream>
 #include <tuple>
+#include <cmath>
+#include <algorithm> 
+
 using namespace std;
 
 typedef tuple<string, string> OperationYear;
@@ -32,7 +35,7 @@ struct readTxt{
     vector<OperationYear> operation_year; // vector operation:year
 
     readTxt(const string& nomearquivo){
-        arquivo_txt=nomearquivo;
+        this->arquivo_txt = nomearquivo;
     }
 
     int PG() { // retorna a profundidade global, de acordo com o in.txt
@@ -129,15 +132,25 @@ struct readCsv{
 
 struct Directory{
     int profundidadeGlobal;
+    int tamanhoDir; // 2**PG = Capacidade global
     readTxt Txt;
     vector<Bucket*> buckets;
-    int leastSigBits;
-    
-    Directory() : Txt("in.txt") { // Inicialize Txt no construtor
-        profundidadeGlobal = Txt.PG(); // Certifique-se de que Txt esteja inicializado
-    }
+   
 
-    //leastSigBits = pegar o log PG base 2
+    // Directory() : Txt("in.txt"), Csv("Compras.csv")
+    Directory() : Txt("in.txt"){ // Inicializando o Txt no construtor
+        
+        profundidadeGlobal = Txt.PG(); 
+        
+        tamanhoDir = pow(2, profundidadeGlobal);
+        buckets.resize(tamanhoDir);
+
+        for (int i = 0; i < tamanhoDir; i++) { // criando os buckets vazios
+            string nomearquivo="bucket" +to_string(i)+ ".txt";
+            buckets[i] = new Bucket(nomearquivo, profundidadeGlobal);
+        }
+
+    }
 
     ~Directory() {
         // Limpeza de memória dos ponteiros Bucket se necessário
@@ -152,20 +165,103 @@ struct Directory{
 
     bool doubleDir(Bucket bucket) {
         int profundidadeLocal = bucket.profundidadeLocal;
-       
-
+        
         if (profundidadeGlobal == profundidadeLocal){
-            profundidadeGlobal *= 2;
+            profundidadeGlobal++;
             buckets.resize(buckets.size()*2);
-            // DUPLICA
 
-            return true; 
+            // aponta para os mesmos buckets inicialmente
+            for (int i = 0; i < buckets.size(); i++) {
+                buckets[buckets.size() + i] = buckets[i]; 
+            }
+            return true;
         } else {
             return false; // não duplicou o diretório
         }
 
     }
-    
+
+    void splitBucket(int index){
+        Bucket* bucket = this->buckets[index]; 
+        vector<Compras> antigo = bucket->compras;
+        bucket->compras.clear(); 
+        
+        int PL = bucket->profundidadeLocal;
+        int newPL = bucket->profundidadeLocal += 1;
+        bucket->profundidadeLocal++; 
+        
+        string nomearquivo= "bucket" + to_string(buckets.size()) + ".txt";
+
+        Bucket* newBucket = new Bucket(nomearquivo, newPL); 
+        this->buckets.push_back(newBucket);
+
+        for(const auto& compra : antigo){
+            int ano = stoi(compra.ano);
+            int newIndex = funcaoHash(ano, newPL);
+
+            if (newIndex == index) {
+                bucket->adicionar_registro(compra.pedido,compra.valor,compra.ano);
+            } else {
+                newBucket->adicionar_registro(compra.pedido,compra.valor,compra.ano); 
+            }
+        }
+
+        bucket->salvar();
+        newBucket->salvar();
+    }
+
+    // FINALIZADO
+    pair<int, int> adicionar(const Compras& compra){
+        int index = funcaoHash(stoi(compra.ano), this->profundidadeGlobal);
+        Bucket* bucket = buckets[index];
+        bucket->carregar();
+        
+        while (doubleDir(*bucket)){
+            doubleDir(*bucket); // enquanto precisar, duplica o diretório
+        }
+        
+        while (bucket->isFull()) { // enquanto o bucket estiver cheio, dar split
+            splitBucket(index);
+        }
+
+        bucket->adicionar_registro(compra.pedido, compra.valor, compra.ano);
+        bucket->salvar();
+
+        return {this->profundidadeGlobal, bucket->profundidadeLocal}; 
+    }
+
+    // FINALIZADO 
+    int busca(int Year){
+        int index = funcaoHash(Year, this->profundidadeGlobal);
+        Bucket* bucket = buckets[index];
+         
+        int numTuples = count_if(bucket->compras.begin(), bucket->compras.end(), [Year](const Compras& compra) {
+            return stoi(compra.ano) == Year;
+        });
+        
+        return numTuples;
+    }
+
+    // FINALIZADO
+    pair<int, int> remover_registro(int Year){
+        int index = funcaoHash(Year, this->profundidadeGlobal);
+        Bucket* bucket = buckets[index];
+
+        bucket->carregar();
+
+        int tuplas_iniciais=bucket->compras.size();
+        
+        bucket->compras.erase( remove_if(bucket->compras.begin(), bucket->compras.end(), [Year](const Compras& compra) {
+            return stoi(compra.ano) == Year;
+        })); 
+
+        int tuplas_final=bucket->compras.size();
+        int tuplas_removidas = abs(tuplas_iniciais - tuplas_final);
+        bucket->salvar();
+
+        return {tuplas_removidas, bucket->profundidadeLocal};
+    }
+
 };
 
 struct Bucket {
@@ -176,12 +272,10 @@ struct Bucket {
 
     // Construtor    
 
-    Bucket(const string& nomearquivo){
+    Bucket(const string& nomearquivo, int profundidade){
         ofstream arquivo(nomearquivo);
-    }
-
-    Bucket(int profundidadeglobal){
-        profundidadeLocal=profundidadeglobal;
+        arquivo.close();
+        profundidadeLocal = profundidade;
         capacidadeMaxima=3;
     }
 
@@ -189,25 +283,32 @@ struct Bucket {
         delete &compras;
     }
 
-    bool isEmpty() {
-        return true;
+    void carregar(){
+        readCsv ler(arquivo);
+        compras=ler.lerArquivo();
+    }
+
+    void salvar(){
+        ofstream file(arquivo);
+        for(const auto& compra:compras){
+            file<<compra.pedido << "," << compra.valor << "," << compra.ano << endl;
+        }
     }
 
     // profundidade local = profundidade global: tem que duplicar o diretório
     bool isFull(){
-        if(compras.size()==capacidadeMaxima){
+        if(compras.size() == capacidadeMaxima){
             return true;
         }
         return false;
     }
 
-    void adicionar_registro(int pedido,double valor,string ano){
+    bool adicionar_registro(int pedido, double valor, string ano){
         if(isFull()){
-            //split
+            return false;
         }
         compras.push_back(Compras(pedido,valor,ano));
-        
-        
+        return true;
     }
-
+    
 };
