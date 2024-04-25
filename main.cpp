@@ -2,8 +2,7 @@
 #include <vector>
 #include <iostream>
 #include <string>
-#include "teste.cpp"
-
+#include "hash.cpp"
 using namespace std; 
 
 int main() {

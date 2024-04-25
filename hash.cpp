@@ -130,6 +130,55 @@ struct readCsv{
 
 };
 
+struct Bucket {
+    string arquivo;
+    vector<Compras> compras;
+    int profundidadeLocal;      // Profundidade local do bucket
+    int capacidadeMaxima;  // Capacidade máxima do bucket
+
+    // Construtor    
+
+    Bucket(const string& nomearquivo, int profundidade){
+        ofstream arquivo(nomearquivo);
+        arquivo.close();
+        profundidadeLocal = profundidade;
+        capacidadeMaxima=3;
+    }
+
+    ~Bucket(){
+        delete &compras;
+    }
+
+    void carregar(){
+        readCsv ler(arquivo);
+        compras=ler.lerArquivo();
+    }
+
+    void salvar(){
+        ofstream file(arquivo);
+        for(const auto& compra:compras){
+            file<<compra.pedido << "," << compra.valor << "," << compra.ano << endl;
+        }
+    }
+
+    // profundidade local = profundidade global: tem que duplicar o diretório
+    bool isFull(){
+        if(compras.size() == capacidadeMaxima){
+            return true;
+        }
+        return false;
+    }
+
+    bool adicionar_registro(int pedido, double valor, string ano){
+        if(isFull()){
+            return false;
+        }
+        compras.push_back(Compras(pedido,valor,ano));
+        return true;
+    }
+    
+};
+
 struct Directory{
     int profundidadeGlobal;
     int tamanhoDir; // 2**PG = Capacidade global
@@ -264,51 +313,3 @@ struct Directory{
 
 };
 
-struct Bucket {
-    string arquivo;
-    vector<Compras> compras;
-    int profundidadeLocal;      // Profundidade local do bucket
-    int capacidadeMaxima;  // Capacidade máxima do bucket
-
-    // Construtor    
-
-    Bucket(const string& nomearquivo, int profundidade){
-        ofstream arquivo(nomearquivo);
-        arquivo.close();
-        profundidadeLocal = profundidade;
-        capacidadeMaxima=3;
-    }
-
-    ~Bucket(){
-        delete &compras;
-    }
-
-    void carregar(){
-        readCsv ler(arquivo);
-        compras=ler.lerArquivo();
-    }
-
-    void salvar(){
-        ofstream file(arquivo);
-        for(const auto& compra:compras){
-            file<<compra.pedido << "," << compra.valor << "," << compra.ano << endl;
-        }
-    }
-
-    // profundidade local = profundidade global: tem que duplicar o diretório
-    bool isFull(){
-        if(compras.size() == capacidadeMaxima){
-            return true;
-        }
-        return false;
-    }
-
-    bool adicionar_registro(int pedido, double valor, string ano){
-        if(isFull()){
-            return false;
-        }
-        compras.push_back(Compras(pedido,valor,ano));
-        return true;
-    }
-    
-};
