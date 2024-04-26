@@ -9,52 +9,68 @@ using namespace std;
 int main() {
     readCsv ComprasCSV("compras.csv");
     vector<Compras> compras_vetor = ComprasCSV.lerArquivo();
-    string line;
-    readTxt inTxt("in.txt"); // struct do hash.cpp
+    // struct do hash.cpp
     ofstream outTxt("out.txt");
-    string OP, YYYY;
+    ifstream inTxt("in.txt");
+    string OP, YYYY, linha, line;
 
-    if (!outTxt.is_open()) {
-        cout << "Erro ao abrir um o arquivo \n";
-        return 0;
+    if (!inTxt.is_open() || !outTxt.is_open()) {
+        cerr << "Erro ao abrir um dos arquivos!" << endl;
+        return 1;
     }
 
-    int PG = inTxt.PG();
+    getline(inTxt, linha);
+    int PG = stoi(linha.substr(3));
+    outTxt << linha << endl;
+
     cout << PG << '\n';
 
     Directory dir = Directory(PG);
 
-    vector<OperationYear> vector_OpYear = inTxt.vector_OpYear();
+    while(getline(inTxt, line)) {
+        stringstream ss(line);
+        int ano;
+        string operacao = line.substr(0, 3);
+        cout<<operacao;
+        
 
-    for (int i = 0; i < vector_OpYear.size(); i++){
-        tie(OP,YYYY) = vector_OpYear[i];
-        if (OP == "INC") {
+        if (operacao == "INC") {
+            ano = stoi(line.substr(4));
+            cout<<ano<<endl;
+            outTxt << "INC:" << ano << "/" << endl;
             for (const auto& compra : compras_vetor) {
-                if (compra.ano == YYYY) {
+                if (compra.ano == to_string(ano)) {
+                    cout<<compra.ano<<endl;
                     pair<int, int> resultadoInsercao = dir.adicionar(compra);
                     
-                    
-                    outTxt << "INC:" << YYYY << "/" << dir.profundidadeGlobal << "," << resultadoInsercao.first << endl;
+                    outTxt << "INC:" << ano << "/" << dir.profundidadeGlobal << "," << resultadoInsercao.first << endl;
 
                     if (resultadoInsercao.second) {
                         outTxt << "DUP_DIR:/" << dir.profundidadeGlobal << "," << resultadoInsercao.first << endl;
                     }
                 }
             }
-        }   
-        if (OP == "BUS=") {
-            int numTuples = dir.busca(stoi(YYYY));
+        } else if (operacao == "REM") {
+            ano = stoi(line.substr(4));
+            outTxt << "REM:" << ano << "/";
+            // <quantidade de tuplas removidas, profundidade local>
+            pair<int, int> resultadoRemocao = dir.remover_registro(ano);
 
-            outTxt << "BUS:" << YYYY << "/" << numTuples << endl;
-            
+            outTxt << "REM:" << ano << "/" << resultadoRemocao.first << "," << dir.profundidadeGlobal << "," << resultadoRemocao.second << endl;
+        } else if (operacao == "BUS") {
+            outTxt << "BUS:" << ano << "/";
+            ano = stoi(line.substr(5));
+            int quantidadeDeTuplas = dir.busca(ano);
+            outTxt << "BUS:" << ano << "/" << quantidadeDeTuplas << endl;
+        } else {
+            outTxt << "NÃO DEU CERTO";
         }
-        if (OP == "REM") {
-            pair<int, int> numTuples = dir.remover_registro(stoi(YYYY));
-            outTxt << "REM:" << YYYY << "/" << numTuples.first << "," << dir.profundidadeGlobal << "," << numTuples.second << endl;
-            
-        }
+    
     }
 
+    outTxt << "P:/" << (dir.profundidadeGlobal) << endl;
+
+    inTxt.close(); 
     outTxt.close();
 
     return 0;

@@ -17,15 +17,15 @@ struct Compras{
     double valor;
     string ano;
 
-    Compras(int pedidu, double valorr, string anoo){
-        pedido=pedidu;
-        valor=valorr;
-        ano=anoo;
+    Compras(int pedido, double valorr, string ano){
+        this->pedido=pedido;
+        this->valor=valorr;
+        this->ano=ano;
     }
     void mostrar(){
-        cout<<"pedido: "<<pedido<<endl;
-        cout<<"valor: "<<valor<<endl;
-        cout<<"ano: "<<ano<<endl;
+        cout << "Pedido: " << pedido << endl;
+        cout << "Valor: " << valor << endl;
+        cout << "Ano: " << ano << endl;
     }
 };
 
@@ -70,7 +70,7 @@ struct readTxt{
             string line;
         
             while (getline(file, line)) { // Lê a primeira linha do arquivo
-                Op = line.substr(0, 2);
+                Op = line.substr(0, 3);
                 
                 if (line.substr(0, 2) == "BUS"){
                     Year = line.substr(5, 7);
@@ -118,10 +118,7 @@ struct readCsv{
 
                 int p=stoi(pedido);
                 double v=stod(valor);
-               
-
                 compra.push_back(Compras(p,v,ano));
-
             }
             file.close();
             return compra;
@@ -141,10 +138,10 @@ struct Bucket {
     // Construtor    
 
     Bucket(const string& nomearquivo, int profundidade){
-        ofstream arquivo(nomearquivo);
-        arquivo.close();
         profundidadeLocal = profundidade;
         capacidadeMaxima=3;
+        ofstream arquivo(nomearquivo);
+        arquivo.close();
     }
 
     ~Bucket(){
@@ -161,6 +158,7 @@ struct Bucket {
         for(const auto& compra:compras){
             file<<compra.pedido << "," << compra.valor << "," << compra.ano << endl;
         }
+        file.close();
     }
 
     // profundidade local = profundidade global: tem que duplicar o diretório
@@ -188,15 +186,14 @@ struct Directory{
 
     // Directory() : Txt("in.txt"), Csv("Compras.csv")
     Directory(int profundidadeglobal) { // Inicializando o Txt no construtor
-        this->profundidadeGlobal = profundidadeGlobal;
-        tamanhoDir = pow(2, profundidadeGlobal);
-        buckets.resize(tamanhoDir);
-           
-
+        this->profundidadeGlobal = profundidadeglobal;
+        tamanhoDir = pow(2, profundidadeglobal);
+       
         for (int i = 0; i < tamanhoDir; i++) { // criando os buckets vazios
-            
-            string nomearquivo="bucket" +to_string(i)+ ".txt";
-            buckets[i] = new Bucket(nomearquivo, profundidadeGlobal);
+            string nomearquivo="bucket" +to_string(i)+ ".csv";
+            Bucket* teste= new Bucket(nomearquivo, profundidadeglobal);
+           
+            buckets.push_back(teste);
         }
 
     }
@@ -216,14 +213,14 @@ struct Directory{
 
     bool doubleDir(Bucket bucket) {
         int profundidadeLocal = bucket.profundidadeLocal;
-        
+        int tamanho=buckets.size();
         if (profundidadeGlobal == profundidadeLocal){
             profundidadeGlobal++;
-            buckets.resize(buckets.size()*2);
+            buckets.resize(tamanho*2);
 
             // aponta para os mesmos buckets inicialmente
-            for (int i = 0; i < buckets.size(); i++) {
-                buckets[buckets.size() + i] = buckets[i]; 
+            for (int i = 0; i < tamanho; i++) {
+                buckets[tamanho + i] = buckets[i]; 
             }
             return true;
         } else {
@@ -241,7 +238,7 @@ struct Directory{
         int newPL = bucket->profundidadeLocal += 1;
         bucket->profundidadeLocal++; 
         
-        string nomearquivo= "bucket" + to_string(buckets.size()) + ".txt";
+        string nomearquivo= "bucket" + to_string(buckets.size()) + ".csv";
 
         Bucket* newBucket = new Bucket(nomearquivo, newPL); 
         this->buckets.push_back(newBucket);
@@ -261,28 +258,31 @@ struct Directory{
         newBucket->salvar();
     }
 
-    // FINALIZADO
-    pair<int, bool> adicionar(const Compras& compra){
+    pair<int, bool> adicionar(const Compras& compra) {
         int index = funcaoHash(stoi(compra.ano), this->profundidadeGlobal);
         Bucket* bucket = buckets[index];
         bucket->carregar();
-        bool state_aux = false; 
+        bool state_aux = false;
 
         if (bucket->isFull()) {
             state_aux = true;
-            while (doubleDir(*bucket)){
+            if (doubleDir(*bucket)) {
                 splitBucket(index);
+    
+                // After splitting, get the correct bucket for the key
+                index = funcaoHash(stoi(compra.ano), this->profundidadeGlobal);
+                bucket = buckets[index];
+                bucket->carregar(); // Reload the bucket after splitting
             }
         }
-        
+
         bucket->adicionar_registro(compra.pedido, compra.valor, compra.ano);
         bucket->salvar();
-        bucket->compras= vector<Compras>();// desalocar memória;
+        bucket->compras.clear();
 
-        return {bucket->profundidadeLocal, state_aux}; 
+        return {bucket->profundidadeLocal, state_aux};
     }
 
-    // FINALIZADO 
     int busca(int Year){
         int index = funcaoHash(Year, this->profundidadeGlobal);
         Bucket* bucket = buckets[index];
@@ -294,7 +294,6 @@ struct Directory{
         return numTuples;
     }
 
-    // FINALIZADO
     pair<int, int> remover_registro(int Year){
         int index = funcaoHash(Year, this->profundidadeGlobal);
         Bucket* bucket = buckets[index];
