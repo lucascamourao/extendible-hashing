@@ -176,7 +176,6 @@ struct Bucket {
         compras.push_back(Compras(pedido,valor,ano));
         return true;
     }
-    
 };
 
 struct Directory{
@@ -185,7 +184,7 @@ struct Directory{
     vector<Bucket*> buckets;
 
     // Directory() : Txt("in.txt"), Csv("Compras.csv")
-    Directory(int profundidadeglobal) { // Inicializando o Txt no construtor
+    Directory(int profundidadeglobal){ // Inicializando o Txt no construtor
         this->profundidadeGlobal = profundidadeglobal;
         tamanhoDir = pow(2, profundidadeglobal);
        
@@ -195,7 +194,6 @@ struct Directory{
            
             buckets.push_back(teste);
         }
-
     }
 
     ~Directory() {
@@ -211,12 +209,15 @@ struct Directory{
         return ano & ((1 << profundidade) - 1);
     }
 
-    bool doubleDir(Bucket bucket) {
-        int profundidadeLocal = bucket.profundidadeLocal;
+    bool doubleDir(Bucket* bucket) {
+        int profundidadeLocal = bucket->profundidadeLocal;
+        
         int tamanho=buckets.size();
+        
         if (profundidadeGlobal == profundidadeLocal){
-            profundidadeGlobal++;
+            this->profundidadeGlobal = this->profundidadeGlobal + 1;
             buckets.resize(tamanho*2);
+            cout<<"duplicou";
 
             // aponta para os mesmos buckets inicialmente
             for (int i = 0; i < tamanho; i++) {
@@ -225,6 +226,7 @@ struct Directory{
             return true;
         } else {
             return false; // não duplicou o diretório
+            cout<<"não duplicou";
         }
 
     }
@@ -265,15 +267,14 @@ struct Directory{
         bool state_aux = false;
 
         if (bucket->isFull()) {
-            state_aux = true;
-            if (doubleDir(*bucket)) {
-                splitBucket(index);
-    
-                // After splitting, get the correct bucket for the key
-                index = funcaoHash(stoi(compra.ano), this->profundidadeGlobal);
-                bucket = buckets[index];
-                bucket->carregar(); // Reload the bucket after splitting
+            if (doubleDir(bucket)) {
+                state_aux = true;
+                doubleDir(bucket);
             }
+            splitBucket(index);
+            index = funcaoHash(stoi(compra.ano), this->profundidadeGlobal);
+            bucket = buckets[index];
+            bucket->carregar(); 
         }
 
         bucket->adicionar_registro(compra.pedido, compra.valor, compra.ano);
@@ -301,10 +302,13 @@ struct Directory{
         bucket->carregar();
 
         int tuplas_iniciais=bucket->compras.size();
-        
-        bucket->compras.erase( remove_if(bucket->compras.begin(), bucket->compras.end(), [Year](const Compras& compra) {
-            return stoi(compra.ano) == Year;
-        })); 
+
+        bucket->compras.erase(
+            remove_if(bucket->compras.begin(), bucket->compras.end(), [Year](const Compras& compra) {
+                return stoi(compra.ano) == Year;
+            }),
+            bucket->compras.end()
+        );
 
         int tuplas_final=bucket->compras.size();
         int tuplas_removidas = abs(tuplas_iniciais - tuplas_final);
