@@ -6,7 +6,7 @@
 #include <tuple>
 #include <cmath>
 #include <algorithm> 
-
+#include <memory>
 using namespace std;
 
 typedef tuple<string, string> OperationYear;
@@ -46,7 +46,7 @@ struct readTxt{
             string line;
             if (getline(file, line)) {
                 try {
-                    PG = stoi(line); // Converte a linha para inteiro
+                    PG = stoi(line.substr(3)); // Converte a linha para inteiro
                 } catch (const invalid_argument& e) {
                     cerr << "Erro: Não foi possível converter para inteiro. " << e.what() << endl;
                 }
@@ -91,7 +91,9 @@ struct readTxt{
         }
 
         file.close();   
-    }    
+    } 
+
+   
 };
 
 struct readCsv{
@@ -182,19 +184,17 @@ struct Bucket {
 struct Directory{
     int profundidadeGlobal;
     int tamanhoDir; // 2**PG = Capacidade global
-    readTxt Txt;
     vector<Bucket*> buckets;
-   
 
     // Directory() : Txt("in.txt"), Csv("Compras.csv")
-    Directory() : Txt("in.txt"){ // Inicializando o Txt no construtor
-        
-        profundidadeGlobal = Txt.PG(); 
-        
+    Directory(int profundidadeglobal) { // Inicializando o Txt no construtor
+        this->profundidadeGlobal = profundidadeGlobal;
         tamanhoDir = pow(2, profundidadeGlobal);
         buckets.resize(tamanhoDir);
+           
 
         for (int i = 0; i < tamanhoDir; i++) { // criando os buckets vazios
+            
             string nomearquivo="bucket" +to_string(i)+ ".txt";
             buckets[i] = new Bucket(nomearquivo, profundidadeGlobal);
         }
@@ -206,6 +206,8 @@ struct Directory{
         for (auto& bucket_ptr : buckets) {
             delete bucket_ptr;
         }
+        //limpeza do vetor de ponteiros;
+        buckets.clear();
     }
 
     int funcaoHash(int ano, int profundidade) const {
@@ -260,23 +262,24 @@ struct Directory{
     }
 
     // FINALIZADO
-    pair<int, int> adicionar(const Compras& compra){
+    pair<int, bool> adicionar(const Compras& compra){
         int index = funcaoHash(stoi(compra.ano), this->profundidadeGlobal);
         Bucket* bucket = buckets[index];
         bucket->carregar();
-        
-        while (doubleDir(*bucket)){
-            doubleDir(*bucket); // enquanto precisar, duplica o diretório
-        }
-        
-        while (bucket->isFull()) { // enquanto o bucket estiver cheio, dar split
-            splitBucket(index);
-        }
+        bool state_aux = false; 
 
+        if (bucket->isFull()) {
+            state_aux = true;
+            while (doubleDir(*bucket)){
+                splitBucket(index);
+            }
+        }
+        
         bucket->adicionar_registro(compra.pedido, compra.valor, compra.ano);
         bucket->salvar();
+        bucket->compras= vector<Compras>();// desalocar memória;
 
-        return {this->profundidadeGlobal, bucket->profundidadeLocal}; 
+        return {bucket->profundidadeLocal, state_aux}; 
     }
 
     // FINALIZADO 
